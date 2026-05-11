@@ -35,6 +35,10 @@ By default lazytorrent talks to `http://127.0.0.1:9091/transmission/rpc` with no
 
 ## Install
 
+Pre-built binaries for macOS and Linux (amd64 + arm64) are on the [releases page](https://github.com/hansbala/lazytorrent/releases).
+
+Or build from source:
+
 ```sh
 git clone https://github.com/hansbala/lazytorrent.git
 cd lazytorrent
@@ -103,6 +107,16 @@ go test ./...      # run all tests
 go build ./...     # compile everything
 go run . --doctor  # quick sanity check
 ```
+
+### Cutting a release
+
+```sh
+scripts/release.sh v0.2.0                       # prompts before pushing
+scripts/release.sh v0.2.0 --dry-run             # show the plan, don't push
+scripts/release.sh v0.2.0 -m "release summary"  # custom tag message
+```
+
+The script verifies a clean tree on `main`, runs tests, and pushes the annotated tag. The push triggers `.github/workflows/release.yml`, which runs goreleaser to build cross-platform tarballs and create the GitHub release.
 
 Layout:
 
