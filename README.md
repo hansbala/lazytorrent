@@ -35,9 +35,19 @@ By default lazytorrent talks to `http://127.0.0.1:9091/transmission/rpc` with no
 
 ## Install
 
-Pre-built binaries for macOS and Linux (amd64 + arm64) are on the [releases page](https://github.com/hansbala/lazytorrent/releases).
+### Homebrew (macOS / Linux)
 
-Or build from source:
+```sh
+brew install hansbala/tap/lazytorrent
+```
+
+Pulls in `transmission-cli` as a dependency, so you get the daemon too.
+
+### Pre-built binaries
+
+Darwin and Linux × amd64 + arm64 tarballs on the [releases page](https://github.com/hansbala/lazytorrent/releases).
+
+### From source
 
 ```sh
 git clone https://github.com/hansbala/lazytorrent.git

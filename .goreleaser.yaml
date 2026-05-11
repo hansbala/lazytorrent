@@ -50,3 +50,24 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+brews:
+  - name: lazytorrent
+    repository:
+      owner: hansbala
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/hansbala/lazytorrent"
+    description: "A lazygit-style terminal UI for torrents over transmission-daemon"
+    license: "MIT"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    install: |
+      bin.install "lazytorrent"
+    test: |
+      system "#{bin}/lazytorrent", "--version"
+    dependencies:
+      - name: transmission-cli
