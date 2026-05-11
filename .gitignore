@@ -1,0 +1,29 @@
+# Binaries
+/lazytorrent
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries and coverage output
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+
+# Environment files
+.env
+.env.local
