@@ -108,3 +108,104 @@ func (c *Client) SessionGet() (*SessionInfo, error) {
 	}
 	return &info, nil
 }
+
+// Transmission status codes (from libtransmission).
+const (
+	StatusStopped      = 0
+	StatusCheckWait    = 1
+	StatusCheck        = 2
+	StatusDownloadWait = 3
+	StatusDownload     = 4
+	StatusSeedWait     = 5
+	StatusSeed         = 6
+)
+
+func StatusString(s int) string {
+	switch s {
+	case StatusStopped:
+		return "Stopped"
+	case StatusCheckWait, StatusCheck:
+		return "Verifying"
+	case StatusDownloadWait:
+		return "Queued"
+	case StatusDownload:
+		return "Downloading"
+	case StatusSeedWait:
+		return "Queued"
+	case StatusSeed:
+		return "Seeding"
+	}
+	return "Unknown"
+}
+
+type Torrent struct {
+	ID             int64   `json:"id"`
+	Name           string  `json:"name"`
+	Status         int     `json:"status"`
+	PercentDone    float64 `json:"percentDone"`
+	RateDownload   int64   `json:"rateDownload"`
+	RateUpload     int64   `json:"rateUpload"`
+	ETA            int64   `json:"eta"`
+	TotalSize      int64   `json:"totalSize"`
+	DownloadedEver int64   `json:"downloadedEver"`
+	UploadedEver   int64   `json:"uploadedEver"`
+	UploadRatio    float64 `json:"uploadRatio"`
+	DownloadDir    string  `json:"downloadDir"`
+	AddedDate      int64   `json:"addedDate"`
+	PeersConnected int     `json:"peersConnected"`
+}
+
+var torrentFields = []string{
+	"id", "name", "status", "percentDone",
+	"rateDownload", "rateUpload", "eta",
+	"totalSize", "downloadedEver", "uploadedEver",
+	"uploadRatio", "downloadDir", "addedDate",
+	"peersConnected",
+}
+
+func (c *Client) TorrentGet() ([]Torrent, error) {
+	args := map[string]any{"fields": torrentFields}
+	var resp struct {
+		Torrents []Torrent `json:"torrents"`
+	}
+	if err := c.Call("torrent-get", args, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Torrents, nil
+}
+
+type AddResult struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	HashString string `json:"hashString"`
+	Duplicate  bool   `json:"-"`
+}
+
+// TorrentAdd queues a torrent on the daemon. `filename` may be a magnet URI,
+// the path to a .torrent file the daemon can read, or base64-encoded torrent data.
+// `downloadDir` may be empty to use the daemon's default.
+// Returns Duplicate=true if Transmission already has this torrent.
+func (c *Client) TorrentAdd(filename, downloadDir string) (*AddResult, error) {
+	args := map[string]any{
+		"filename": filename,
+		"paused":   false,
+	}
+	if downloadDir != "" {
+		args["download-dir"] = downloadDir
+	}
+	var resp struct {
+		TorrentAdded     *AddResult `json:"torrent-added"`
+		TorrentDuplicate *AddResult `json:"torrent-duplicate"`
+	}
+	if err := c.Call("torrent-add", args, &resp); err != nil {
+		return nil, err
+	}
+	if resp.TorrentDuplicate != nil {
+		resp.TorrentDuplicate.Duplicate = true
+		return resp.TorrentDuplicate, nil
+	}
+	if resp.TorrentAdded != nil {
+		return resp.TorrentAdded, nil
+	}
+	return nil, fmt.Errorf("torrent-add: empty response")
+}

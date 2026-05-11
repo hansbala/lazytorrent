@@ -87,6 +87,78 @@ func TestCall_Returns401WhenAuthRequired(t *testing.T) {
 	}
 }
 
+func TestTorrentGet_DecodesTorrentArray(t *testing.T) {
+	body := `{"result":"success","arguments":{"torrents":[
+		{"id":1,"name":"ubuntu.iso","status":4,"percentDone":0.87,"rateDownload":4400000,"rateUpload":312000,"eta":134,"totalSize":4194304000,"downloadedEver":3650000000,"uploadedEver":0,"uploadRatio":0,"downloadDir":"/Users/x/Downloads","addedDate":1715000000,"peersConnected":42},
+		{"id":2,"name":"debian.iso","status":6,"percentDone":1,"rateDownload":0,"rateUpload":22000,"eta":-1,"totalSize":700000000,"downloadedEver":700000000,"uploadedEver":938000000,"uploadRatio":1.34,"downloadDir":"/Users/x/Downloads","addedDate":1714000000,"peersConnected":12}
+	]}}`
+	srv, _ := fakeServer(t, "sid", body)
+	defer srv.Close()
+
+	c := New(srv.URL)
+	ts, err := c.TorrentGet()
+	if err != nil {
+		t.Fatalf("TorrentGet: %v", err)
+	}
+	if len(ts) != 2 {
+		t.Fatalf("expected 2 torrents, got %d", len(ts))
+	}
+	if ts[0].Name != "ubuntu.iso" || ts[0].PercentDone != 0.87 || ts[0].Status != StatusDownload {
+		t.Errorf("torrent 0 decoded incorrectly: %+v", ts[0])
+	}
+	if ts[1].UploadRatio != 1.34 || ts[1].Status != StatusSeed {
+		t.Errorf("torrent 1 decoded incorrectly: %+v", ts[1])
+	}
+}
+
+func TestTorrentAdd_NewTorrent(t *testing.T) {
+	body := `{"result":"success","arguments":{"torrent-added":{"id":7,"name":"ubuntu.iso","hashString":"abc123"}}}`
+	srv, _ := fakeServer(t, "sid", body)
+	defer srv.Close()
+
+	c := New(srv.URL)
+	r, err := c.TorrentAdd("magnet:?xt=urn:btih:abc", "/tmp/dl")
+	if err != nil {
+		t.Fatalf("TorrentAdd: %v", err)
+	}
+	if r.ID != 7 || r.Name != "ubuntu.iso" || r.Duplicate {
+		t.Errorf("got %+v", r)
+	}
+}
+
+func TestTorrentAdd_Duplicate(t *testing.T) {
+	body := `{"result":"success","arguments":{"torrent-duplicate":{"id":7,"name":"ubuntu.iso","hashString":"abc123"}}}`
+	srv, _ := fakeServer(t, "sid", body)
+	defer srv.Close()
+
+	c := New(srv.URL)
+	r, err := c.TorrentAdd("magnet:?xt=urn:btih:abc", "")
+	if err != nil {
+		t.Fatalf("TorrentAdd returned err on duplicate: %v", err)
+	}
+	if !r.Duplicate {
+		t.Errorf("expected Duplicate=true, got %+v", r)
+	}
+}
+
+func TestStatusString_CoversAllCodes(t *testing.T) {
+	cases := map[int]string{
+		StatusStopped:      "Stopped",
+		StatusCheckWait:    "Verifying",
+		StatusCheck:        "Verifying",
+		StatusDownloadWait: "Queued",
+		StatusDownload:     "Downloading",
+		StatusSeedWait:     "Queued",
+		StatusSeed:         "Seeding",
+		999:                "Unknown",
+	}
+	for code, want := range cases {
+		if got := StatusString(code); got != want {
+			t.Errorf("StatusString(%d) = %q; want %q", code, got, want)
+		}
+	}
+}
+
 func TestCall_PropagatesRPCResultError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Transmission-Session-Id") == "" {

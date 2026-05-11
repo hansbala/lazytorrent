@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"lazytorrent/internal/doctor"
+	"lazytorrent/internal/tui"
 )
 
 func main() {
@@ -25,5 +26,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("TUI not implemented yet. System checks passed — run `lazytorrent --doctor` for full status.")
+	if err := tui.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "lazytorrent: %v\n", err)
+		os.Exit(1)
+	}
 }

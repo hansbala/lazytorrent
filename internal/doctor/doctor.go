@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"lazytorrent/internal/pathutil"
 	"lazytorrent/internal/transmission"
 )
 
@@ -261,7 +262,7 @@ func checkDownloadDir() (string, error) {
 		return "", err
 	}
 
-	dir := expandHome(info.DownloadDir)
+	dir := pathutil.ExpandHome(info.DownloadDir)
 	stat, err := os.Stat(dir)
 	if err != nil {
 		return "", fmt.Errorf("%s: %v", info.DownloadDir, err)
@@ -292,17 +293,6 @@ func extractVersion(line string) string {
 		}
 	}
 	return ""
-}
-
-func expandHome(p string) string {
-	if !strings.HasPrefix(p, "~") {
-		return p
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return p
-	}
-	return filepath.Join(home, strings.TrimPrefix(p, "~"))
 }
 
 func isWritable(dir string) bool {
