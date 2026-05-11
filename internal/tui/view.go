@@ -11,10 +11,11 @@ import (
 )
 
 var (
-	activeColor = lipgloss.Color("12")
-	accentColor = lipgloss.Color("14")
-	mutedColor  = lipgloss.Color("8")
-	warnColor   = lipgloss.Color("9")
+	activeColor  = lipgloss.Color("12")
+	accentColor  = lipgloss.Color("14")
+	mutedColor   = lipgloss.Color("8")
+	warnColor    = lipgloss.Color("9")
+	successColor = lipgloss.Color("10")
 )
 
 func (m model) View() string {
@@ -28,51 +29,39 @@ func (m model) View() string {
 		bodyHeight = 5
 	}
 
-	var body string
-	if m.modal.active {
-		body = m.renderModal(m.width, bodyHeight)
-	} else {
-		listWidth := m.width / 2
-		detailsWidth := m.width - listWidth
-		listView := m.renderList(listWidth, bodyHeight)
-		detailsView := m.renderDetails(detailsWidth, bodyHeight)
-		body = lipgloss.JoinHorizontal(lipgloss.Top, listView, detailsView)
+	switch m.mode {
+	case modeAdd:
+		return lipgloss.JoinVertical(lipgloss.Left,
+			m.renderAddModal(m.width, bodyHeight),
+			m.renderHelp(m.width))
+	case modeDelete:
+		return lipgloss.JoinVertical(lipgloss.Left,
+			m.renderDeleteModal(m.width, bodyHeight),
+			m.renderHelp(m.width))
+	case modeHelp:
+		return lipgloss.JoinVertical(lipgloss.Left,
+			m.renderHelpOverlay(m.width, bodyHeight),
+			m.renderHelp(m.width))
+	case modeFilter:
+		filterBarHeight := 1
+		body := m.renderBody(m.width, bodyHeight-filterBarHeight)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			body,
+			m.renderFilterBar(m.width),
+			m.renderHelp(m.width))
+	default:
+		return lipgloss.JoinVertical(lipgloss.Left,
+			m.renderBody(m.width, bodyHeight),
+			m.renderHelp(m.width))
 	}
-
-	help := m.renderHelp(m.width)
-	return lipgloss.JoinVertical(lipgloss.Left, body, help)
 }
 
-func (m model) renderModal(totalWidth, totalHeight int) string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(activeColor).Render("Add torrent")
-	labelStyle := lipgloss.NewStyle().Faint(true)
-
-	parts := []string{
-		title,
-		"",
-		labelStyle.Render("Source"),
-		m.modal.magnet.View(),
-		"",
-		labelStyle.Render("Save to"),
-		m.modal.saveDir.View(),
-	}
-
-	if m.modal.err != "" {
-		parts = append(parts, "")
-		parts = append(parts, lipgloss.NewStyle().Foreground(warnColor).Render("⚠ "+m.modal.err))
-	}
-	if m.modal.submitting {
-		parts = append(parts, "")
-		parts = append(parts, labelStyle.Render("adding..."))
-	}
-
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(activeColor).
-		Padding(1, 2).
-		Render(strings.Join(parts, "\n"))
-
-	return lipgloss.Place(totalWidth, totalHeight, lipgloss.Center, lipgloss.Center, box)
+func (m model) renderBody(w, h int) string {
+	listWidth := w / 2
+	detailsWidth := w - listWidth
+	listView := m.renderList(listWidth, h)
+	detailsView := m.renderDetails(detailsWidth, h)
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailsView)
 }
 
 func paneStyle(width, height int, active bool) lipgloss.Style {
@@ -89,17 +78,29 @@ func paneStyle(width, height int, active bool) lipgloss.Style {
 }
 
 func (m model) renderList(width, height int) string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(activeColor).
-		Render(fmt.Sprintf("Torrents (%d)", len(m.torrents)))
+	visible := m.visibleTorrents()
+	title := fmt.Sprintf("Torrents (%d", len(visible))
+	if m.filter.query != "" {
+		title += fmt.Sprintf("/%d", len(m.torrents))
+	}
+	title += ")"
+	if m.filter.query != "" {
+		title += "  " + lipgloss.NewStyle().Foreground(accentColor).Render("filter: "+m.filter.query)
+	}
+	header := lipgloss.NewStyle().Bold(true).Foreground(activeColor).Render(title)
 
-	rows := []string{title, ""}
-
-	if len(m.torrents) == 0 {
-		empty := lipgloss.NewStyle().Foreground(mutedColor).Render("No torrents.")
-		rows = append(rows, empty)
+	rows := []string{header, ""}
+	if len(visible) == 0 {
+		var msg string
+		if m.filter.query != "" {
+			msg = "No torrents match filter."
+		} else {
+			msg = "No torrents."
+		}
+		rows = append(rows, lipgloss.NewStyle().Foreground(mutedColor).Render(msg))
 	} else {
 		inner := width - 4
-		for i, t := range m.torrents {
+		for i, t := range visible {
 			rows = append(rows, m.formatListRow(t, i == m.selected, inner))
 			rows = append(rows, "")
 		}
@@ -151,11 +152,11 @@ func (m model) renderDetails(width, height int) string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("Details")
 	rows := []string{title, ""}
 
-	if len(m.torrents) == 0 {
+	t, ok := m.currentTorrent()
+	if !ok {
 		rows = append(rows, lipgloss.NewStyle().Foreground(mutedColor).
 			Render("Select a torrent to view its details."))
 	} else {
-		t := m.torrents[m.selected]
 		rows = append(rows, lipgloss.NewStyle().Bold(true).Render(truncate(t.Name, width-4)))
 		rows = append(rows, "")
 		rows = append(rows, detailRow("Status", transmission.StatusString(t.Status)))
@@ -179,49 +180,188 @@ func detailRow(label, value string) string {
 	return labelStyle.Render(label) + " " + value
 }
 
+// --- add modal ---
+
+func (m model) renderAddModal(totalWidth, totalHeight int) string {
+	title := lipgloss.NewStyle().Bold(true).Foreground(activeColor).Render("Add torrent")
+	labelStyle := lipgloss.NewStyle().Faint(true)
+
+	parts := []string{
+		title,
+		"",
+		labelStyle.Render("Source"),
+		m.addModal.magnet.View(),
+		"",
+		labelStyle.Render("Save to"),
+		m.addModal.saveDir.View(),
+	}
+
+	if m.addModal.err != "" {
+		parts = append(parts, "")
+		parts = append(parts, lipgloss.NewStyle().Foreground(warnColor).Render("⚠ "+m.addModal.err))
+	}
+	if m.addModal.submitting {
+		parts = append(parts, "")
+		parts = append(parts, labelStyle.Render("adding..."))
+	}
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(activeColor).
+		Padding(1, 2).
+		Render(strings.Join(parts, "\n"))
+
+	return lipgloss.Place(totalWidth, totalHeight, lipgloss.Center, lipgloss.Center, box)
+}
+
+// --- delete modal ---
+
+func (m model) renderDeleteModal(totalWidth, totalHeight int) string {
+	border := warnColor
+	title := "Delete torrent?"
+	bodyText := "This removes it from Transmission but keeps the downloaded files."
+	if m.deleteModal.withFiles {
+		title = "Delete torrent AND files?"
+		bodyText = lipgloss.NewStyle().Foreground(warnColor).Bold(true).
+			Render("This will also delete the downloaded files from disk.")
+	}
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(border)
+	nameStyle := lipgloss.NewStyle().Bold(true)
+	muted := lipgloss.NewStyle().Faint(true)
+
+	content := strings.Join([]string{
+		titleStyle.Render(title),
+		"",
+		nameStyle.Render(truncate(m.deleteModal.torrentName, 60)),
+		"",
+		bodyText,
+		"",
+		muted.Render("y / Enter — confirm    n / Esc — cancel"),
+	}, "\n")
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(border).
+		Padding(1, 2).
+		Render(content)
+
+	return lipgloss.Place(totalWidth, totalHeight, lipgloss.Center, lipgloss.Center, box)
+}
+
+// --- help overlay ---
+
+func (m model) renderHelpOverlay(totalWidth, totalHeight int) string {
+	groupStyle := lipgloss.NewStyle().PaddingRight(4)
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(activeColor)
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(accentColor).Width(12)
+	muted := lipgloss.NewStyle().Faint(true)
+
+	var columns []string
+	for _, g := range helpContent() {
+		var rows []string
+		rows = append(rows, titleStyle.Render(g.title))
+		rows = append(rows, "")
+		for _, kd := range g.keys {
+			rows = append(rows, keyStyle.Render(kd[0])+" "+kd[1])
+		}
+		columns = append(columns, groupStyle.Render(strings.Join(rows, "\n")))
+	}
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, columns...)
+	heading := titleStyle.Render("Keyboard shortcuts")
+	footer := muted.Render("any key to close")
+
+	content := strings.Join([]string{heading, "", body, "", footer}, "\n")
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(activeColor).
+		Padding(1, 2).
+		Render(content)
+
+	return lipgloss.Place(totalWidth, totalHeight, lipgloss.Center, lipgloss.Center, box)
+}
+
+// --- filter bar ---
+
+func (m model) renderFilterBar(width int) string {
+	prefix := lipgloss.NewStyle().Foreground(activeColor).Bold(true).Render("filter: ")
+	bar := prefix + m.filter.input.View()
+	return lipgloss.NewStyle().Width(width).Padding(0, 1).Render(bar)
+}
+
+// --- help bar at bottom ---
+
 func (m model) renderHelp(width int) string {
 	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(accentColor)
 	var parts []string
-	if m.modal.active {
+	switch m.mode {
+	case modeAdd:
 		parts = []string{
 			keyStyle.Render("Tab") + " next field",
 			keyStyle.Render("Enter") + " add",
 			keyStyle.Render("Esc") + " cancel",
 		}
-	} else {
+	case modeDelete:
+		parts = []string{
+			keyStyle.Render("y/Enter") + " confirm",
+			keyStyle.Render("n/Esc") + " cancel",
+		}
+	case modeFilter:
+		parts = []string{
+			keyStyle.Render("type") + " to filter live",
+			keyStyle.Render("Enter") + " keep",
+			keyStyle.Render("Esc") + " cancel",
+		}
+	case modeHelp:
+		parts = []string{
+			keyStyle.Render("any key") + " close",
+		}
+	default:
 		parts = []string{
 			keyStyle.Render("a") + " add",
-			keyStyle.Render("j/k") + " navigate",
-			keyStyle.Render("h/l") + " switch panel",
-			keyStyle.Render("g/G") + " top/bottom",
+			keyStyle.Render("␣") + " pause",
+			keyStyle.Render("d/D") + " delete",
+			keyStyle.Render("/") + " filter",
+			keyStyle.Render("?") + " help",
 			keyStyle.Render("q") + " quit",
 		}
 	}
 	left := strings.Join(parts, "   ")
-
-	right := ""
-	if !m.modal.active {
-		if m.lastErr != nil {
-			right = lipgloss.NewStyle().Foreground(warnColor).Render("⚠ " + m.lastErr.Error())
-		} else if !m.lastRefresh.IsZero() {
-			age := time.Since(m.lastRefresh).Truncate(time.Second)
-			if age > 3*time.Second {
-				right = lipgloss.NewStyle().Foreground(mutedColor).
-					Render(fmt.Sprintf("refresh: %s ago", age))
-			}
-		}
-	}
+	right := m.renderHelpRight()
 
 	if right == "" {
 		return lipgloss.NewStyle().Width(width).Padding(0, 1).Render(left)
 	}
-
 	pad := width - lipgloss.Width(left) - lipgloss.Width(right) - 2
 	if pad < 1 {
 		pad = 1
 	}
 	return lipgloss.NewStyle().Padding(0, 1).
 		Render(left + strings.Repeat(" ", pad) + right)
+}
+
+// renderHelpRight returns the right-aligned status indicator: a transient
+// status message (if any), an error indicator, or a stale-refresh hint.
+func (m model) renderHelpRight() string {
+	if m.status.visible() {
+		return lipgloss.NewStyle().Foreground(m.status.color).Render(m.status.text)
+	}
+	if m.mode != modeNormal {
+		return ""
+	}
+	if m.lastErr != nil {
+		return lipgloss.NewStyle().Foreground(warnColor).Render("⚠ " + m.lastErr.Error())
+	}
+	if !m.lastRefresh.IsZero() {
+		age := time.Since(m.lastRefresh).Truncate(time.Second)
+		if age > 3*time.Second {
+			return lipgloss.NewStyle().Foreground(mutedColor).
+				Render(fmt.Sprintf("refresh: %s ago", age))
+		}
+	}
+	return ""
 }
 
 // --- helpers ---

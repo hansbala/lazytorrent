@@ -16,7 +16,6 @@ import (
 const magnetPrefix = "magnet:?"
 
 type addModal struct {
-	active     bool
 	magnet     textinput.Model
 	saveDir    textinput.Model
 	focused    int // 0=source, 1=saveDir
@@ -71,13 +70,12 @@ func (a *addModal) forwardKey(msg tea.Msg) tea.Cmd {
 }
 
 // prepareAdd validates and normalizes the modal's inputs. Accepts:
-//   - magnet URIs ("magnet:?...")     — passed through
-//   - HTTP(S) URLs                    — passed through (daemon fetches)
-//   - local .torrent file paths       — tilde-expanded, resolved to absolute,
-//     must exist on disk and end in .torrent
+//   - magnet URIs ("magnet:?...")
+//   - HTTP(S) URLs (daemon fetches)
+//   - local .torrent file paths (tilde-expanded, must exist & end in .torrent)
 //
-// Returns ("", "", validationErr) if the input doesn't match any of these.
-// `saveDir` is always tilde-expanded.
+// Returns ("", "", validationErr) on rejection. `saveDir` is always
+// tilde-expanded.
 func prepareAdd(rawSource, rawSaveDir string) (source, saveDir, validationErr string) {
 	source = strings.TrimSpace(rawSource)
 	saveDir = pathutil.ExpandHome(strings.TrimSpace(rawSaveDir))
@@ -111,9 +109,8 @@ func prepareAdd(rawSource, rawSaveDir string) (source, saveDir, validationErr st
 }
 
 // isAddableSource is the more conservative classifier used for clipboard
-// auto-paste. We only auto-paste magnet URIs and .torrent URLs to avoid
-// hijacking the field when the user has arbitrary URLs or text in their
-// clipboard.
+// auto-paste. We only auto-paste magnet URIs and .torrent URLs so the field
+// doesn't get hijacked by arbitrary URLs or text.
 func isAddableSource(s string) bool {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, magnetPrefix) {

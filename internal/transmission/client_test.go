@@ -1,11 +1,37 @@
 package transmission
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+// captureRPC starts a fake server that responds with `respBody`, runs `fn` once
+// against a client pointed at it, and returns the body of the post-handshake
+// request. The server handles the 409 session-id flow automatically.
+func captureRPC(t *testing.T, respBody string, fn func(*Client) error) string {
+	t.Helper()
+	var captured string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Transmission-Session-Id") == "" {
+			w.Header().Set("X-Transmission-Session-Id", "sid")
+			w.WriteHeader(http.StatusConflict)
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		captured = string(b)
+		_, _ = w.Write([]byte(respBody))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL)
+	if err := fn(c); err != nil {
+		t.Fatalf("RPC call returned error: %v", err)
+	}
+	return captured
+}
 
 // fakeServer returns the canonical Transmission 409-then-200 handshake.
 // First request without X-Transmission-Session-Id returns 409 + header.
@@ -138,6 +164,76 @@ func TestTorrentAdd_Duplicate(t *testing.T) {
 	}
 	if !r.Duplicate {
 		t.Errorf("expected Duplicate=true, got %+v", r)
+	}
+}
+
+func TestTorrentActionRPCs_SendExpectedMethodAndIDs(t *testing.T) {
+	ok := `{"result":"success","arguments":{}}`
+	cases := []struct {
+		name         string
+		fn           func(*Client) error
+		wantMethod   string
+		wantContains []string
+	}{
+		{
+			name:         "TorrentStop",
+			fn:           func(c *Client) error { return c.TorrentStop(1, 2) },
+			wantMethod:   "torrent-stop",
+			wantContains: []string{`"ids":[1,2]`},
+		},
+		{
+			name:         "TorrentStart",
+			fn:           func(c *Client) error { return c.TorrentStart(7) },
+			wantMethod:   "torrent-start",
+			wantContains: []string{`"ids":[7]`},
+		},
+		{
+			name:         "TorrentRemove keeps files",
+			fn:           func(c *Client) error { return c.TorrentRemove(false, 3) },
+			wantMethod:   "torrent-remove",
+			wantContains: []string{`"ids":[3]`, `"delete-local-data":false`},
+		},
+		{
+			name:         "TorrentRemove deletes files",
+			fn:           func(c *Client) error { return c.TorrentRemove(true, 3) },
+			wantMethod:   "torrent-remove",
+			wantContains: []string{`"ids":[3]`, `"delete-local-data":true`},
+		},
+		{
+			name:         "TorrentReannounce",
+			fn:           func(c *Client) error { return c.TorrentReannounce(4) },
+			wantMethod:   "torrent-reannounce",
+			wantContains: []string{`"ids":[4]`},
+		},
+		{
+			name:         "TorrentVerify",
+			fn:           func(c *Client) error { return c.TorrentVerify(5, 6) },
+			wantMethod:   "torrent-verify",
+			wantContains: []string{`"ids":[5,6]`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := captureRPC(t, ok, tc.fn)
+			if !strings.Contains(body, `"method":"`+tc.wantMethod+`"`) {
+				t.Errorf("body should contain method %q, got %s", tc.wantMethod, body)
+			}
+			for _, want := range tc.wantContains {
+				if !strings.Contains(body, want) {
+					t.Errorf("body should contain %q, got %s", want, body)
+				}
+			}
+		})
+	}
+}
+
+func TestTorrentGet_IncludesMagnetLinkField(t *testing.T) {
+	body := captureRPC(t, `{"result":"success","arguments":{"torrents":[]}}`, func(c *Client) error {
+		_, err := c.TorrentGet()
+		return err
+	})
+	if !strings.Contains(body, `"magnetLink"`) {
+		t.Errorf("torrent-get request should request the magnetLink field, got %s", body)
 	}
 }
 

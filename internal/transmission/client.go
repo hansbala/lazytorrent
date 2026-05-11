@@ -153,14 +153,19 @@ type Torrent struct {
 	DownloadDir    string  `json:"downloadDir"`
 	AddedDate      int64   `json:"addedDate"`
 	PeersConnected int     `json:"peersConnected"`
+	HashString     string  `json:"hashString"`
+	MagnetLink     string  `json:"magnetLink"`
 }
+
+// IsPaused reports whether the torrent is currently stopped.
+func (t Torrent) IsPaused() bool { return t.Status == StatusStopped }
 
 var torrentFields = []string{
 	"id", "name", "status", "percentDone",
 	"rateDownload", "rateUpload", "eta",
 	"totalSize", "downloadedEver", "uploadedEver",
 	"uploadRatio", "downloadDir", "addedDate",
-	"peersConnected",
+	"peersConnected", "hashString", "magnetLink",
 }
 
 func (c *Client) TorrentGet() ([]Torrent, error) {
@@ -208,4 +213,33 @@ func (c *Client) TorrentAdd(filename, downloadDir string) (*AddResult, error) {
 		return resp.TorrentAdded, nil
 	}
 	return nil, fmt.Errorf("torrent-add: empty response")
+}
+
+// TorrentStop pauses one or more torrents.
+func (c *Client) TorrentStop(ids ...int64) error {
+	return c.Call("torrent-stop", map[string]any{"ids": ids}, nil)
+}
+
+// TorrentStart resumes one or more torrents.
+func (c *Client) TorrentStart(ids ...int64) error {
+	return c.Call("torrent-start", map[string]any{"ids": ids}, nil)
+}
+
+// TorrentRemove removes torrents from the daemon. If deleteLocal is true the
+// local data files are also deleted from disk.
+func (c *Client) TorrentRemove(deleteLocal bool, ids ...int64) error {
+	return c.Call("torrent-remove", map[string]any{
+		"ids":               ids,
+		"delete-local-data": deleteLocal,
+	}, nil)
+}
+
+// TorrentReannounce forces an immediate tracker announce.
+func (c *Client) TorrentReannounce(ids ...int64) error {
+	return c.Call("torrent-reannounce", map[string]any{"ids": ids}, nil)
+}
+
+// TorrentVerify queues a local-data checksum verification.
+func (c *Client) TorrentVerify(ids ...int64) error {
+	return c.Call("torrent-verify", map[string]any{"ids": ids}, nil)
 }
