@@ -41,11 +41,31 @@ By default lazytorrent talks to `http://127.0.0.1:9091/transmission/rpc` with no
 brew install hansbala/tap/lazytorrent
 ```
 
-Pulls in `transmission-cli` as a dependency, so you get the daemon too.
+### Arch Linux (AUR)
 
-### Pre-built binaries
+```sh
+yay -S lazytorrent-bin       # or your preferred AUR helper
+```
 
-Darwin and Linux × amd64 + arm64 tarballs on the [releases page](https://github.com/hansbala/lazytorrent/releases).
+### Debian / Ubuntu
+
+Download the latest `.deb` from the [releases page](https://github.com/hansbala/lazytorrent/releases):
+
+```sh
+curl -LO https://github.com/hansbala/lazytorrent/releases/latest/download/lazytorrent_<version>_linux_amd64.deb
+sudo dpkg -i lazytorrent_*.deb
+```
+
+### Fedora / RHEL
+
+```sh
+curl -LO https://github.com/hansbala/lazytorrent/releases/latest/download/lazytorrent_<version>_linux_amd64.rpm
+sudo rpm -i lazytorrent_*.rpm
+```
+
+### Pre-built tarballs
+
+Darwin and Linux × amd64 + arm64 tarballs (no package manager) on the [releases page](https://github.com/hansbala/lazytorrent/releases).
 
 ### From source
 

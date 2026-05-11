@@ -71,3 +71,42 @@ brews:
       system "#{bin}/lazytorrent", "--version"
     dependencies:
       - name: transmission-cli
+
+nfpms:
+  - id: lazytorrent
+    package_name: lazytorrent
+    vendor: hansbala
+    homepage: "https://github.com/hansbala/lazytorrent"
+    maintainer: "Hans Bala <hansbala@hansbala.com>"
+    description: |
+      A lazygit-style terminal UI for torrents over transmission-daemon.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    overrides:
+      deb:
+        dependencies:
+          - transmission-daemon
+      rpm:
+        dependencies:
+          - transmission-daemon
+      apk:
+        dependencies:
+          - transmission-daemon
+
+aurs:
+  - name: lazytorrent-bin
+    homepage: "https://github.com/hansbala/lazytorrent"
+    description: "A lazygit-style terminal UI for torrents over transmission-daemon"
+    maintainers:
+      - "Hans Bala <hansbala@hansbala.com>"
+    license: MIT
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/lazytorrent-bin.git"
+    package: |-
+      install -Dm755 "./lazytorrent" "${pkgdir}/usr/bin/lazytorrent"
+    depends:
+      - transmission-cli
