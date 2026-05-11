@@ -65,8 +65,6 @@ Press `?` inside the TUI for the in-app cheat sheet.
 |-----|--------|
 | `j` / `k` | down / up |
 | `g` / `G` | top / bottom |
-| `h` / `l` | switch panel |
-| `Tab` | cycle panes |
 | `/` | filter by name |
 
 **Torrent actions**

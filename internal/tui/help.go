@@ -13,8 +13,6 @@ func helpContent() []helpGroup {
 			keys: [][2]string{
 				{"j / k", "down / up"},
 				{"g / G", "top / bottom"},
-				{"h / l", "switch panel"},
-				{"Tab", "cycle panes"},
 				{"/", "filter by name"},
 			},
 		},

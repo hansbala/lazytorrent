@@ -64,11 +64,7 @@ func (m model) renderBody(w, h int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailsView)
 }
 
-func paneStyle(width, height int, active bool) lipgloss.Style {
-	border := mutedColor
-	if active {
-		border = activeColor
-	}
+func paneStyle(width, height int, border lipgloss.Color) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(border).
@@ -106,7 +102,7 @@ func (m model) renderList(width, height int) string {
 		}
 	}
 
-	return paneStyle(width, height, m.focus == paneList).Render(strings.Join(rows, "\n"))
+	return paneStyle(width, height, activeColor).Render(strings.Join(rows, "\n"))
 }
 
 func (m model) formatListRow(t transmission.Torrent, selected bool, w int) string {
@@ -114,11 +110,7 @@ func (m model) formatListRow(t transmission.Torrent, selected bool, w int) strin
 	nameStyle := lipgloss.NewStyle()
 	if selected {
 		indicator = "▸ "
-		if m.focus == paneList {
-			nameStyle = nameStyle.Bold(true).Foreground(activeColor)
-		} else {
-			nameStyle = nameStyle.Bold(true)
-		}
+		nameStyle = nameStyle.Bold(true).Foreground(activeColor)
 	}
 
 	name := truncate(t.Name, w-2)
@@ -172,7 +164,7 @@ func (m model) renderDetails(width, height int) string {
 		rows = append(rows, detailRow("Added", humanDate(t.AddedDate)))
 	}
 
-	return paneStyle(width, height, m.focus == paneDetails).Render(strings.Join(rows, "\n"))
+	return paneStyle(width, height, mutedColor).Render(strings.Join(rows, "\n"))
 }
 
 func detailRow(label, value string) string {

@@ -10,13 +10,6 @@ import (
 	"lazytorrent/internal/transmission"
 )
 
-type pane int
-
-const (
-	paneList pane = iota
-	paneDetails
-)
-
 type tuiMode int
 
 const (
@@ -41,7 +34,6 @@ type model struct {
 	client         *transmission.Client
 	torrents       []transmission.Torrent
 	selected       int // index into visibleTorrents()
-	focus          pane
 	width          int
 	height         int
 	lastErr        error
@@ -171,31 +163,19 @@ func (m model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "j", "down":
 		visible := m.visibleTorrents()
-		if m.focus == paneList && len(visible) > 0 {
+		if len(visible) > 0 {
 			m.selected = min(m.selected+1, len(visible)-1)
 		}
 	case "k", "up":
-		if m.focus == paneList && len(m.visibleTorrents()) > 0 {
+		if len(m.visibleTorrents()) > 0 {
 			m.selected = max(m.selected-1, 0)
 		}
 	case "g":
-		if m.focus == paneList {
-			m.selected = 0
-		}
+		m.selected = 0
 	case "G":
 		visible := m.visibleTorrents()
-		if m.focus == paneList && len(visible) > 0 {
+		if len(visible) > 0 {
 			m.selected = len(visible) - 1
-		}
-	case "h", "left":
-		m.focus = paneList
-	case "l", "right":
-		m.focus = paneDetails
-	case "tab":
-		if m.focus == paneList {
-			m.focus = paneDetails
-		} else {
-			m.focus = paneList
 		}
 
 	case "a":
